@@ -3,7 +3,11 @@ const { Schema, model } = require("mongoose");
 
 const userSchema = new Schema(
   {
-    fullName: {
+    firstName: {
+      type: String,
+      required: true,
+    },
+    lastName: {
       type: String,
       required: true,
     },
@@ -33,21 +37,16 @@ const userSchema = new Schema(
   { timestamps: true }
 );
 
-//We are using this middleware to hased the password,before saving data to the database.
-
+// We are using this middleware to hash the password before saving data to the database.
 userSchema.pre("save", function (next) {
   const user = this;
-  if (!user.isModified("password")) return;
-  const salt = randomBytes(16).toString();
-  const hasedPassword = createHmac("sha256", salt.update(user.password)).
-  digest(
-    "hex"
-  );
+  if (!user.isModified("password")) return next();
+  const salt = randomBytes(16).toString("hex"); // Generate random bytes as hex string
+  const hashedPassword = createHmac("sha256", salt).update(user.password).digest("hex");
 
-  this.salt = salt;
-  this.password = hasedPassword;
-
-  next()
+  user.salt = salt;
+  user.password = hashedPassword;
+  next();
 });
 
 const User = model("user", userSchema);
