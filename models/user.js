@@ -38,15 +38,35 @@ const userSchema = new Schema(
 );
 
 // We are using this middleware to hash the password before saving data to the database.
-userSchema.pre("save", function (next) {
-  const user = this;
+userSchema.pre("save", async function (next) {
+  const user = await this.findOne({email});
   if (!user.isModified("password")) return next();
-  const salt = randomBytes(16).toString("hex"); // Generate random bytes as hex string
-  const hashedPassword = createHmac("sha256", salt).update(user.password).digest("hex");
+  const salt = randomBytes(16).toString("hex"); 
+  const hashedPassword = createHmac("sha256", salt)
+    .update(user.password)
+    .digest("hex");
 
   user.salt = salt;
   user.password = hashedPassword;
   next();
+});
+
+userSchema.static("matchPassword", function (email, password) {
+  const user = this.findOne({ email });
+  if (!user) throw new Error("User Not Found");
+
+  const salt = user.salt;
+  const hashedPassword = user.password;
+
+  const userProvidedHash = createHmac("sha256", salt)
+    .update(password)
+    .digest("hex");
+
+  if (hashedPassword !== userProvidedHash)
+    throw new Error("Invalid Credential");
+
+  return { ...user, password: undefined, salt: undefined };
+  //  return hashedPassword === userProvidedHash;
 });
 
 const User = model("user", userSchema);
