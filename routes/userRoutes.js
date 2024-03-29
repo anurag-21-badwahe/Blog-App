@@ -22,7 +22,11 @@ router.post("/",
   ).isLength({ min: 6 }),
 ],registerUser);
 
-router.post("/auth", authUser);
+router.post("/auth",
+[
+  check('email', 'Please include a valid email').isEmail(),
+  check('password', 'Please is required').exists(),
+], authUser);
 router.post("/logout", logoutUser);
 router.get("/profile",protect,getUserProfile)
 
