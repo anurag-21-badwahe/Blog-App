@@ -4,20 +4,28 @@ import {
   authUser,
   logoutUser,
   getUserProfile,
-  updateUserProfile,
 } from "../controllers/userController.js";
+import { check, validationResult } from 'express-validator';
 
 import { protect } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/", registerUser);
+router.post("/",
+[
+  check('firstName', 'First Name is required').not().isEmpty(),
+  check('lastName', 'Last Name is required').not().isEmpty(),
+  check('email', 'Please include a valid email').isEmail(),
+  check(
+    'password',
+    'Please enter a password with 6 or more character'
+  ).isLength({ min: 6 }),
+],registerUser);
+
 router.post("/auth", authUser);
 router.post("/logout", logoutUser);
+router.get("/profile",protect,getUserProfile)
 
-router
-  .route("/profile")
-  .get(protect, getUserProfile)
-  .put(protect, updateUserProfile);
+
 
 export default router;

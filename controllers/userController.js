@@ -2,135 +2,80 @@ import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
 import generateToken from "../utils/createToken.js";
 import User from "../models/userModel.js";
-import { first } from "rxjs";
+import { validationResult } from 'express-validator';
 
-// @desc    Register a new user
-// @route   POST /api/users
-// @access  Public
+
+// Register a new user
 const registerUser = asyncHandler(async (req, res) => {
-  const { firstName,lastName, email, password } = req.body;
-  if (!email || !password || !firstName || !lastName) {
-    res.status(400);
-    throw new Error("please enter all required fields");
-  }
-  const userExists = await User.findOne({ email });
 
-  if (userExists) {
-    res.status(400);
-    throw new Error("User already exists");
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
   }
-
-  //Hash the password
+  const { firstName, lastName, email, password } = req.body;
+  
+  // Hash the password
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
-  const newUser = new User({ firstName,lastName, email, password: hashedPassword });
+  const newUser = new User({ firstName, lastName, email, password: hashedPassword });
   await newUser.save();
 
-  if (newUser) {
-    generateToken(res, newUser._id);
-    res.status(201);
-    res.json({
-      message: "User successfully created",
-      user: {
-        _id: newUser._id,
-        email: newUser.email,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
-      },
-    });
-  } else {
-    res.status(401);
-    throw new Error("Please enter correct values");
-  }
+  generateToken(res, newUser._id);
+  res.status(201).json({
+    message: "User successfully created",
+    user: {
+      _id: newUser._id,
+      email: newUser.email,
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
+    },
+  });
 });
 
-// @desc    Auth user & get token
-// @route   POST /api/users/auth
-// @access  Public
+// Auth user & get token
 const authUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-  const userExists = await User.findOne({ email });
-  if (userExists) {
-    const validPassword = await bcrypt.compare(password, userExists.password);
+  const user = await User.findOne({ email });
 
-    if (validPassword) {
-      generateToken(res, userExists._id);
-      res.status(200).json({
-        _id: userExists._id,
-        email: userExists.email,
-      });
-    } else {
-      res.status(401);
-      throw new Error("Invalid email or password");
-    }
-  } else {
-    res.status(404);
-    throw new Error("user not found");
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
   }
+
+  const validPassword = await bcrypt.compare(password, user.password);
+  if (!validPassword) {
+    return res.status(401).json({ message: "Invalid email or password" });
+  }
+
+  generateToken(res, user._id);
+  res.status(200).json({
+    _id: user._id,
+    email: user.email,
+  });
 });
 
-// @desc    Logout user / clear cookie
-// @route   POST /api/users/logout
-// @access  Public
+// Logout user / clear cookie
 const logoutUser = asyncHandler(async (req, res) => {
-  res.cookie("jwt", "", {
-    httpOnly: true,
-    expires: new Date(0),
-  });
+  res.clearCookie("jwt", { httpOnly: true });
   res.status(200).send("User logged out");
 });
 
-// @desc    Get user profile
-// @route   GET /api/users/profile
-// @access  Public
+// Get user profile
 const getUserProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id);
 
-  if (user) {
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-    });
-  } else {
-    res.status(404);
-    throw new Error("User not found");
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
   }
+
+  res.json({
+    email: user.email,
+  });
 });
-
-// @desc    Get user profile
-// @route   PUT /api/users/profile
-// @access  Public
-const updateUserProfile = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
-
-  if (user) {
-    user.name = req.body.name || user.name;
-    user.email = req.body.email || user.email;
-
-    if (req.body.password) {
-      user.password = req.body.password;
-    }
-
-    const updatedUser = await user.save();
-
-    res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-    });
-  } else {
-    res.status(404);
-    throw new Error("User not found");
-  }
-});
-
 
 export {
   registerUser,
   authUser,
   logoutUser,
-  getUserProfile,
-  updateUserProfile,
+  getUserProfile
 };
